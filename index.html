@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Sunset Observatory (GSO) | Real-time Analytical Dashboard</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="Науково-аналітична платформа для глобального моніторингу заходів сонця в реальному часі. Аналіз космічної погоди, атмосферного розсіювання світла та відслідковування лінії термінатора Землі.">
+    <meta name="keywords" content="захід сонця, сансет, термінатор землі, космічна погода, сонячний вітер, розсіювання світла, NOAA, NASA, аналітика">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    
+    <!-- Leaflet CSS for World Map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    
+    <!-- FontAwesome for Premium Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom Style Sheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body class="github-dark">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-container">
+            <div class="repo-info">
+                <i class="fa-solid fa-satellite-dish header-logo"></i>
+                <div class="repo-title-wrapper">
+                    <div class="repo-path">
+                        <span class="user-owner">orbital-dynamics</span> / 
+                        <span class="repo-name">global-sunset-observatory</span>
+                        <span class="badge badge-live">● LIVE</span>
+                    </div>
+                    <p class="repo-desc">Глобальний науковий моніторинг оптичних атмосферних аномалій, лінії термінатора та космічної погоди в реальному часі.</p>
+                </div>
+            </div>
+            <div class="repo-actions">
+                <button class="btn btn-sm btn-action" id="btn-refresh">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>Оновити дані</span>
+                </button>
+                <div class="social-counters">
+                    <div class="social-btn">
+                        <i class="fa-regular fa-star"></i> Star <span class="counter-num">1.4k</span>
+                    </div>
+                    <div class="social-btn">
+                        <i class="fa-solid fa-code-fork"></i> Fork <span class="counter-num">248</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Repo Navigation Tabs -->
+        <nav class="repo-tabs">
+            <div class="tabs-container">
+                <a href="#dashboard" class="tab-item active" data-tab="dashboard">
+                    <i class="fa-solid fa-chart-line"></i> Analytics <span class="tab-badge">24</span>
+                </a>
+                <a href="#map-view" class="tab-item" data-tab="map-view">
+                    <i class="fa-solid fa-earth-americas"></i> Live Terminator Map
+                </a>
+                <a href="#space-weather" class="tab-item" data-tab="space-weather">
+                    <i class="fa-solid fa-sun-plant-wilt"></i> Space Weather
+                </a>
+                <a href="#logs" class="tab-item" data-tab="logs">
+                    <i class="fa-solid fa-terminal"></i> Telemetry & Alerts
+                </a>
+            </div>
+        </nav>
+    </header>
+    <!-- Main Container -->
+    <main class="dashboard-grid container">
+        
+        <!-- Sidebar: Real-time Atmospheric Metrics -->
+        <aside class="sidebar-metrics">
+            <!-- System Status Panel -->
+            <div class="panel glass-panel mb-4 animate-glow">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-circle-nodes pulse-icon text-success"></i> Статус телеметрії</h3>
+                    <span class="lbl-status" id="last-update">Оновлено: Щойно</span>
+                </div>
+                <div class="panel-body">
+                    <div class="telemetry-grid">
+                        <div class="tel-card">
+                            <span class="tel-label">Швидкість сонячного вітру</span>
+                            <div class="tel-value-wrapper">
+                                <span class="tel-value" id="solar-wind-val">421.8</span>
+                                <span class="tel-unit">км/с</span>
+                            </div>
+                            <span class="tel-trend text-success"><i class="fa-solid fa-caret-up"></i> Номінальна активність</span>
+                        </div>
+                        <div class="tel-card">
+                            <span class="tel-label">Індекс геомагнітної бурі</span>
+                            <div class="tel-value-wrapper">
+                                <span class="tel-value" id="kp-index-val">Kp 2.3</span>
+                                <span class="tel-unit">G0</span>
+                            </div>
+                            <span class="tel-trend text-success" id="kp-trend"><i class="fa-solid fa-circle-check"></i> Спокійно</span>
+                        </div>
+                        <div class="tel-card">
+                            <span class="tel-label">Рівень аерозолів (AOD)</span>
+                            <div class="tel-value-wrapper">
+                                <span class="tel-value" id="aod-val">0.18</span>
+                                <span class="tel-unit">τ</span>
+                            </div>
+                            <span class="tel-trend text-warning" id="aod-trend"><i class="fa-solid fa-circle-exclamation"></i> Помірне розсіювання</span>
+                        </div>
+                        <div class="tel-card">
+                            <span class="tel-label">Активна зона заходу</span>
+                            <div class="tel-value-wrapper">
+                                <span class="tel-value" id="sunset-area-val">12,450</span>
+                                <span class="tel-unit">тис км²</span>
+                            </div>
+                            <span class="tel-trend text-info"><i class="fa-solid fa-globe"></i> Рух на захід</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Golden Hour Target Zones -->
+            <div class="panel glass-panel mb-4">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-hourglass-half text-amber"></i> Активні зони золотого часу</h3>
+                </div>
+                <div class="panel-body scrollable-y list-panel" id="golden-hour-list">
+                    <!-- Dynamic List of Cities currently at sunset -->
+                    <div class="loading-spinner">
+                        <i class="fa-solid fa-spinner fa-spin"></i> Обчислення координат...
+                    </div>
+                </div>
+            </div>
+            <!-- Atmospheric Scatter Model -->
+            <div class="panel glass-panel">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-wand-magic-sparkles text-sunset"></i> Прогноз кольору неба</h3>
+                </div>
+                <div class="panel-body">
+                    <div class="color-preview-container">
+                        <div class="sky-color-bar" id="sky-gradient-preview"></div>
+                        <div class="color-ratio-legend">
+                            <div class="ratio-item">
+                                <span class="color-dot bg-blue"></span>
+                                <span class="lbl">Релей (Синє світло): <strong id="rayleigh-perc">42%</strong></span>
+                            </div>
+                            <div class="ratio-item">
+                                <span class="color-dot bg-orange"></span>
+                                <span class="lbl">Мі (Аерозольний червоний): <strong id="mie-perc">58%</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="explanation-text mt-2">
+                        <strong>Коментар фізика атмосфери:</strong> Високий рівень вологості та пилових часток у поєднанні з сонячним вітром класу G0 створюють насичені вогняно-жовтогарячі відтінки на лінії 45-55° північної широти.
+                    </p>
+                </div>
+            </div>
+        </aside>
+        <!-- Main Content Area -->
+        <section class="main-telemetry">
+            
+            <!-- Map Card -->
+            <div class="panel glass-panel mb-4 no-padding map-panel">
+                <div class="panel-header map-header px-4 py-3">
+                    <div class="title-with-subtitle">
+                        <h3><i class="fa-solid fa-satellite text-danger"></i> Спутниковій моніторинг лінії термінатора</h3>
+                        <p class="panel-subtitle">Модель дня/ночі та межа заходу сонця в реальному часі</p>
+                    </div>
+                    <div class="map-controls">
+                        <button class="btn btn-xs active" id="map-btn-dark">Dark Vector</button>
+                        <button class="btn btn-xs" id="map-btn-satellite">IR Cloud Sat</button>
+                    </div>
+                </div>
+                <div class="map-wrapper">
+                    <div id="sunset-map"></div>
+                    <canvas id="fallback-map-canvas"></canvas>
+                    <div class="map-overlay-hud">
+                        <div class="hud-item">
+                            <span class="hud-lbl">Subsolar Pt:</span>
+                            <span class="hud-val" id="subsolar-coords">0.00° N, 0.00° W</span>
+                        </div>
+                        <div class="hud-item">
+                            <span class="hud-lbl">Terminator Length:</span>
+                            <span class="hud-val">40,075 km</span>
+                        </div>
+                        <div class="hud-item">
+                            <span class="hud-lbl">Terminator Velocity:</span>
+                            <span class="hud-val">1,670 km/h</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Charts Grid -->
+            <div class="charts-row">
+                <!-- Spectral Analysis Chart -->
+                <div class="panel glass-panel chart-container">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-chart-area text-purple"></i> Спектральний аналіз поглинання</h3>
+                    </div>
+                    <div class="panel-body chart-body">
+                        <canvas id="spectralChart"></canvas>
+                    </div>
+                </div>
+                <!-- Solar Activity and Winds -->
+                <div class="panel glass-panel chart-container">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-chart-line text-warning"></i> Інтенсивність сонячного випромінювання</h3>
+                    </div>
+                    <div class="panel-body chart-body">
+                        <canvas id="solarWindChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <!-- Alerts & Real-time Console Log -->
+            <div class="panel glass-panel mt-4 console-panel">
+                <div class="panel-header console-header">
+                    <h3><i class="fa-solid fa-triangle-exclamation text-warning"></i> Стрічка сповіщень та аномалій космічної погоди</h3>
+                    <div class="console-actions">
+                        <span class="badge badge-error animate-pulse" id="alert-counter">1 Активна аномалія</span>
+                    </div>
+                </div>
+                <div class="panel-body console-body scrollable-y" id="system-alerts-log">
+                    <!-- Dynamic warnings go here -->
+                </div>
+            </div>
+            
+        </section>
+    </main>
+    <!-- Footer -->
+    <footer class="app-footer container mt-5">
+        <div class="footer-border"></div>
+        <div class="footer-content">
+            <div class="footer-logo-wrapper">
+                <i class="fa-solid fa-earth-americas text-muted"></i>
+                <span>© 2026 Global Sunset Observatory. Всі права захищено.</span>
+            </div>
+            <div class="footer-links">
+                <a href="#api"><i class="fa-solid fa-book"></i> API Docs</a>
+                <a href="#satellite"><i class="fa-solid fa-satellite"></i> Sentinel Live Feed</a>
+                <a href="#noaa"><i class="fa-solid fa-sun"></i> NOAA Data Source</a>
+                <span class="text-muted">| System Latency: <span id="system-latency">45ms</span></span>
+            </div>
+        </div>
+    </footer>
+    <!-- Leaflet.js Mapping Library -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""></script>
+    
+    <!-- Chart.js for beautiful analytics graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Custom App Logic -->
+    <script src="app.js"></script>
+</body>
+</html>
