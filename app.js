@@ -154,7 +154,7 @@ const State = {
 // Loaded dynamically from Wikipedia Commons (cached globally by Wikipedia servers)
 const earthImage = new Image();
 earthImage.crossOrigin = "anonymous";
-earthImage.src = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c4/Earthmap1000x500compac.jpg/800px-Earthmap1000x500compac.jpg";
+earthImage.src = "https://upload.wikimedia.org/wikipedia/commons/e/ea/Equirectangular-projection.jpg";
 
 earthImage.onload = () => {
     console.log("Photographic Earth Satellite Texture loaded successfully!");
@@ -487,21 +487,22 @@ function setMapStyle(style) {
     document.getElementById("map-btn-dark").classList.toggle("active", style === 'dark');
     document.getElementById("map-btn-satellite").classList.toggle("active", style === 'satellite');
 
-    let tileUrl;
     if (style === 'dark') {
-        tileUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        const tileUrl = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+        L.tileLayer(tileUrl, {
+            maxZoom: 19
+        }).addTo(State.map);
     } else {
-        tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{x}/{y}';
+        const tileUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+        L.tileLayer(tileUrl, {
+            maxZoom: 19
+        }).addTo(State.map);
         
         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png', {
             maxZoom: 20,
             zIndex: 10
         }).addTo(State.map);
     }
-
-    L.tileLayer(tileUrl, {
-        maxZoom: 19
-    }).addTo(State.map);
 }
 
 // --- High-Tech World Map (HTML5 Canvas Fallback) ---
@@ -577,12 +578,37 @@ function drawCanvasFallbackMap(solar) {
         ctx.fillRect(0, h - (15 / 180) * h, w, (15 / 180) * h);
     }
     
-    // 2. Draw Semi-Transparent Day-Night Terminator Shadow Mask
-    const geom = generateTerminatorPolygon(solar.declination, solar.subsolarLon);
+    // 2. Draw Semi-Transparent Day-Night Terminator Shadow Mask (4 Twilight Layers)
     
-    ctx.fillStyle = "rgba(4, 5, 12, 0.65)"; // Dark twilight shroud
+    // Layer 1: Astronomical Night and beyond (Sun Alt <= -12)
+    const astroGeom = generateTwilightPolygon(solar.declination, solar.subsolarLon, -12);
+    ctx.fillStyle = "rgba(4, 5, 12, 0.65)"; // Deep dark night
     ctx.beginPath();
-    geom.nightPolygon.forEach((pt, idx) => {
+    astroGeom.polygon.forEach((pt, idx) => {
+        const { x, y } = getCanvasXY(pt[0], pt[1]);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.fill();
+
+    // Layer 2: Nautical Twilight Shadow (-6 to -12)
+    const nauticalGeom = generateTwilightPolygon(solar.declination, solar.subsolarLon, -6);
+    ctx.fillStyle = "rgba(16, 22, 47, 0.32)"; // Indigo twilight overlay
+    ctx.beginPath();
+    nauticalGeom.polygon.forEach((pt, idx) => {
+        const { x, y } = getCanvasXY(pt[0], pt[1]);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.fill();
+
+    // Layer 3: Civil Twilight Shadow (0 to -6)
+    const civilGeom = generateTwilightPolygon(solar.declination, solar.subsolarLon, 0);
+    ctx.fillStyle = "rgba(74, 17, 48, 0.16)"; // Faint warm twilight overlay
+    ctx.beginPath();
+    civilGeom.polygon.forEach((pt, idx) => {
         const { x, y } = getCanvasXY(pt[0], pt[1]);
         if (idx === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
@@ -591,20 +617,34 @@ function drawCanvasFallbackMap(solar) {
     ctx.fill();
     
     // 3. Draw Glowing Neon Sunset Terminator Line
-    ctx.strokeStyle = "#ff9966";
+    ctx.strokeStyle = "#ff5e3a";
     ctx.lineWidth = 2.5;
-    ctx.shadowColor = "#ff9966";
+    ctx.shadowColor = "#ff5e3a";
     ctx.shadowBlur = 10;
     
     ctx.beginPath();
-    geom.terminatorLine.forEach((pt, idx) => {
+    civilGeom.line.forEach((pt, idx) => {
         const { x, y } = getCanvasXY(pt[0], pt[1]);
         if (idx === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
     });
     ctx.stroke();
     
-    ctx.shadowBlur = 0; // reset glow for other indicators
+    ctx.shadowBlur = 0; // Reset glow for other indicators
+    
+    // Golden Hour dashed line limit (+6)
+    const goldenGeom = generateTwilightPolygon(solar.declination, solar.subsolarLon, 6);
+    ctx.strokeStyle = "rgba(255, 158, 71, 0.5)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 6]);
+    ctx.beginPath();
+    goldenGeom.line.forEach((pt, idx) => {
+        const { x, y } = getCanvasXY(pt[0], pt[1]);
+        if (idx === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]); // Reset line dash
     
     // 4. Draw Active Cities markers inside the sunset zone
     State.cities.forEach(city => {
@@ -699,37 +739,54 @@ function getSunElevation(lat, lon, solarDeclination, subsolarLon) {
     return Math.asin(sinAlt) * 180 / Math.PI; // in degrees
 }
 
-function generateTerminatorPolygon(solarDeclination, subsolarLon) {
+function generateTwilightPolygon(solarDeclination, subsolarLon, targetAltDegrees) {
     const points = [];
     const step = 2; 
-    const northPoleInNight = solarDeclination < 0; 
+    const targetAltRad = targetAltDegrees * Math.PI / 180;
     
     for (let lon = -180; lon <= 180; lon += step) {
         const lonRad = lon * Math.PI / 180;
         const subsolarLonRad = subsolarLon * Math.PI / 180;
-        const dec = Math.abs(solarDeclination) < 0.0001 ? 0.0001 : solarDeclination;
-        const tanLat = -Math.cos(lonRad - subsolarLonRad) / Math.tan(dec);
-        let lat = Math.atan(tanLat) * 180 / Math.PI;
         
-        points.push([lat, lon]);
+        const A = Math.sin(solarDeclination);
+        const B = Math.cos(solarDeclination) * Math.cos(lonRad - subsolarLonRad);
+        const C = Math.sin(targetAltRad);
+        
+        const r = Math.sqrt(A*A + B*B);
+        if (Math.abs(C) > r) {
+            // Polar day or night at this longitude for this sun elevation
+            points.push([C > 0 ? 90 : -90, lon]);
+        } else {
+            const theta = Math.atan2(B, A);
+            const latRad = Math.asin(C / r) - theta;
+            let lat = latRad * 180 / Math.PI;
+            
+            // Normalize & clamp latitude
+            if (lat < -90) lat = -180 - lat;
+            if (lat > 90) lat = 180 - lat;
+            points.push([Math.max(-90, Math.min(90, lat)), lon]);
+        }
     }
     
-    const nightPolygon = [];
+    // Close polygon based on hemisphere illumination
+    const northPoleInNight = (solarDeclination < 0 && targetAltDegrees <= 0) || (solarDeclination >= 0 && targetAltDegrees > 0);
+    
+    const poly = [];
     if (northPoleInNight) {
-        nightPolygon.push([-90, -180]);
-        points.forEach(p => nightPolygon.push(p));
-        nightPolygon.push([90, 180]);
-        nightPolygon.push([90, -180]);
+        poly.push([-90, -180]);
+        points.forEach(p => poly.push([p[0], p[1]]));
+        poly.push([90, 180]);
+        poly.push([90, -180]);
     } else {
-        nightPolygon.push([90, -180]);
-        points.forEach(p => nightPolygon.push(p));
-        nightPolygon.push([-90, 180]);
-        nightPolygon.push([-90, -180]);
+        poly.push([90, -180]);
+        points.forEach(p => poly.push([p[0], p[1]]));
+        poly.push([-90, 180]);
+        poly.push([-90, -180]);
     }
     
     return {
-        terminatorLine: points,
-        nightPolygon: nightPolygon
+        line: points,
+        polygon: poly
     };
 }
 
@@ -738,6 +795,7 @@ async function runTelemetryCycle() {
     State.currentTime = new Date();
     
     await fetchNOAASpaceWeather();
+    await fetchSolarRadiation();
     
     const solar = calculateSolarPhysics();
     
@@ -752,6 +810,7 @@ async function runTelemetryCycle() {
 
     updateActiveGoldenHourList(solar);
     calculateAtmosphericScattering();
+    updateScienceTelemetry(solar);
     updateChartHistories();
     evaluateSystemAlerts();
 
@@ -765,19 +824,48 @@ function drawTerminator(solar) {
     if (!State.terminatorLayer) return;
     State.terminatorLayer.clearLayers();
     
-    const geom = generateTerminatorPolygon(solar.declination, solar.subsolarLon);
-    
-    L.polygon(geom.nightPolygon, {
+    // 1. Full Night / Astronomical Twilight (Sun elevation < -12)
+    const astro = generateTwilightPolygon(solar.declination, solar.subsolarLon, -12);
+    L.polygon(astro.polygon, {
         color: 'transparent',
-        fillColor: '#05070a',
-        fillOpacity: 0.58,
+        fillColor: '#04050c',
+        fillOpacity: 0.65,
         interactive: false
     }).addTo(State.terminatorLayer);
 
-    L.polyline(geom.terminatorLine, {
-        color: '#ff9966',
-        weight: 2.5,
-        opacity: 0.85,
+    // 2. Nautical Twilight Band (-6 to -12)
+    const nautical = generateTwilightPolygon(solar.declination, solar.subsolarLon, -6);
+    L.polygon(nautical.polygon, {
+        color: 'transparent',
+        fillColor: '#10162f',
+        fillOpacity: 0.32,
+        interactive: false
+    }).addTo(State.terminatorLayer);
+
+    // 3. Civil Twilight Band (0 to -6)
+    const civil = generateTwilightPolygon(solar.declination, solar.subsolarLon, 0);
+    L.polygon(civil.polygon, {
+        color: 'transparent',
+        fillColor: '#4a1130',
+        fillOpacity: 0.16,
+        interactive: false
+    }).addTo(State.terminatorLayer);
+
+    // 4. Glowing Sunset Golden Hour Line
+    L.polyline(civil.line, {
+        color: '#ff5e3a',
+        weight: 3.5,
+        opacity: 0.9,
+        interactive: false
+    }).addTo(State.terminatorLayer);
+    
+    // Faint outer golden hour limit (+6)
+    const golden = generateTwilightPolygon(solar.declination, solar.subsolarLon, 6);
+    L.polyline(golden.line, {
+        color: '#ff9e47',
+        weight: 1.2,
+        opacity: 0.4,
+        dashArray: '4,6',
         interactive: false
     }).addTo(State.terminatorLayer);
 }
@@ -991,6 +1079,85 @@ async function fetchNOAASpaceWeather() {
     document.getElementById("sunset-area-val").innerText = sunsetArea.toLocaleString('uk-UA');
 }
 
+// --- Fetch Open-Meteo Solar Radiation API & Fallbacks ---
+async function fetchSolarRadiation() {
+    try {
+        const response = await fetch("https://api.open-meteo.com/v1/forecast?latitude=50.45&longitude=30.52&current=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,uv_index&timezone=auto");
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.current) {
+                const cur = data.current;
+                
+                document.getElementById("solar-global-val").innerText = cur.shortwave_radiation;
+                document.getElementById("solar-direct-val").innerText = cur.direct_normal_irradiance;
+                document.getElementById("solar-diffuse-val").innerText = cur.diffuse_radiation;
+                document.getElementById("solar-uv-val").innerText = cur.uv_index;
+                
+                const globalTrend = document.getElementById("solar-global-trend");
+                if (cur.shortwave_radiation > 150) {
+                    globalTrend.className = "tel-trend text-success";
+                    globalTrend.innerHTML = '<i class="fa-solid fa-sun"></i> Активна інсоляція';
+                } else if (cur.shortwave_radiation > 5) {
+                    globalTrend.className = "tel-trend text-warning";
+                    globalTrend.innerHTML = '<i class="fa-solid fa-cloud-sun"></i> Згасання світла';
+                } else {
+                    globalTrend.className = "tel-trend text-muted";
+                    globalTrend.innerHTML = '<i class="fa-solid fa-moon"></i> Нічний період';
+                }
+
+                const directTrend = document.getElementById("solar-direct-trend");
+                if (cur.direct_normal_irradiance > 100) {
+                    directTrend.className = "tel-trend text-success";
+                    directTrend.innerHTML = '<i class="fa-solid fa-caret-up"></i> Висока яскравість';
+                } else {
+                    directTrend.className = "tel-trend text-muted";
+                    directTrend.innerHTML = '<i class="fa-solid fa-caret-down"></i> Низький потік';
+                }
+
+                const diffuseTrend = document.getElementById("solar-diffuse-trend");
+                if (cur.diffuse_radiation > 40) {
+                    diffuseTrend.className = "tel-trend text-info";
+                    diffuseTrend.innerHTML = '<i class="fa-solid fa-circle-nodes"></i> Високе розсіювання';
+                } else {
+                    diffuseTrend.className = "tel-trend text-muted";
+                    diffuseTrend.innerHTML = '<i class="fa-solid fa-circle"></i> Нормальний фон';
+                }
+
+                const uvTrend = document.getElementById("solar-uv-trend");
+                if (cur.uv_index >= 3) {
+                    uvTrend.className = "tel-trend text-danger";
+                    uvTrend.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Потрібен захист';
+                } else if (cur.uv_index > 0) {
+                    uvTrend.className = "tel-trend text-success";
+                    uvTrend.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Безпечний рівень';
+                } else {
+                    uvTrend.className = "tel-trend text-muted";
+                    uvTrend.innerHTML = '<i class="fa-solid fa-circle"></i> Нульовий індекс';
+                }
+                
+                document.getElementById("solar-api-status").innerText = "API Live";
+                document.getElementById("solar-api-status").className = "lbl-status text-success";
+                
+                logConsoleMessage("system", "Отримано свіжі дані інсоляції та УФ від Open-Meteo.");
+            }
+        }
+    } catch (e) {
+        console.warn("Failed to fetch solar radiation data from Open-Meteo:", e);
+        document.getElementById("solar-api-status").innerText = "API Offline";
+        document.getElementById("solar-api-status").className = "lbl-status text-danger";
+        
+        const mockGlobal = Math.max(0, Math.round(50 + Math.sin(new Date().getTime() / 100000) * 150));
+        const mockDirect = Math.max(0, Math.round(mockGlobal * 1.5));
+        const mockDiffuse = Math.max(0, Math.round(mockGlobal * 0.4));
+        const mockUV = parseFloat(Math.max(0, (mockGlobal / 100)).toFixed(1));
+        
+        document.getElementById("solar-global-val").innerText = mockGlobal;
+        document.getElementById("solar-direct-val").innerText = mockDirect;
+        document.getElementById("solar-diffuse-val").innerText = mockDiffuse;
+        document.getElementById("solar-uv-val").innerText = mockUV;
+    }
+}
+
 // --- Atmospheric Scattering (Light Physics Simulation) ---
 function calculateAtmosphericScattering() {
     let rayleighWeight = 100 - (State.aerosolOpticalDepth * 150); 
@@ -1014,6 +1181,169 @@ function calculateAtmosphericScattering() {
     }
     
     document.getElementById("sky-gradient-preview").style.background = skyGradient;
+}
+
+// --- Scientific Telemetry Expansion Modules ---
+function updateScienceTelemetry(solar) {
+    const time = new Date().getTime();
+    
+    // 1. Block A: Atmospheric Refraction & Mirages
+    const temp = 15 + Math.sin(time / 60000) * 8; // Simulated local temperature in C
+    const humidity = 60 + Math.cos(time / 45000) * 15; // Simulated humidity in %
+    
+    // Normal refraction at horizon is ~34.5 arcminutes
+    const refractionAngle = (34.0 + (temp - 15) * -0.04 + (humidity - 60) * 0.015 + (Math.random() - 0.5) * 0.05).toFixed(1);
+    
+    // Green flash probability requires: high refraction and extremely clean air (low AOD)
+    const aod = State.aerosolOpticalDepth;
+    const greenFlashProb = Math.max(0, Math.min(100, Math.round((0.55 - aod) * 120 + (parseFloat(refractionAngle) - 33.5) * 20)));
+    
+    // Mirage probability (e.g. Fata-Morgana) is high during temperature inversion
+    const mirageProb = Math.max(0, Math.min(100, Math.round(aod * 35 + Math.abs(temp - 15) * 4 + (Math.random() * 5))));
+    
+    // Update DOM
+    document.getElementById("refraction-angle").innerText = `${refractionAngle}'`;
+    document.getElementById("green-flash-index").innerText = `${greenFlashProb}%`;
+    document.getElementById("mirage-prob").innerText = `${mirageProb}%`;
+    
+    // Animate Bending Ray in SVG
+    const refractionSvg = document.getElementById("refraction-svg");
+    if (refractionSvg) {
+        const ray = refractionSvg.querySelector(".light-ray");
+        const lbl = refractionSvg.querySelector(".lbl-beam");
+        if (ray) {
+            // Curving the control point of the quadratic path based on refraction angle
+            const controlY = Math.max(15, Math.min(48, 50 - (parseFloat(refractionAngle) - 30) * 2.5));
+            ray.setAttribute("d", `M 10 50 Q 100 ${controlY} 190 20`);
+            
+            // Highlight color based on index
+            if (greenFlashProb > 50) {
+                ray.setAttribute("stroke", "#00f2fe"); // Glowing cyan/green ray
+                if (lbl) lbl.style.fill = "#00f2fe";
+            } else {
+                ray.setAttribute("stroke", "var(--color-info)");
+                if (lbl) lbl.style.fill = "var(--color-info)";
+            }
+        }
+    }
+    
+    // 2. Block B: Sky Spectroradiometry & Color Temperature
+    // Color temperature of the sunset sky (Rayleigh / Mie ratio)
+    const rayleighWeight = 100 - (aod * 150);
+    const kTemp = Math.max(1600, Math.min(12500, Math.round(2000 + (rayleighWeight * 70) - (State.kpIndex * 80) + Math.sin(time / 30000) * 150)));
+    
+    // Red to Blue ratio
+    const rbRatio = (1.5 + (aod * 5.2) + (Math.random() - 0.5) * 0.1).toFixed(2);
+    
+    // Sky Chroma (color saturation intensity)
+    const skyChroma = Math.max(20, Math.min(100, Math.round(60 + (aod * 60) - (State.kpIndex * 4))));
+    
+    // Update DOM
+    document.getElementById("sky-temp-kelvin").innerText = `${kTemp} K`;
+    document.getElementById("rb-ratio").innerText = rbRatio;
+    document.getElementById("sky-chroma").innerText = `${skyChroma}%`;
+    
+    // Dynamic Swatch Color HEX Generation
+    const rgb = getSkyRGBForTemp(kTemp, aod);
+    const hexColor = rgbToHex(rgb.r, rgb.g, rgb.b);
+    
+    const swatch = document.getElementById("sky-color-swatch");
+    const swatchHex = document.getElementById("swatch-hex");
+    if (swatch) {
+        swatch.style.background = `linear-gradient(135deg, ${hexColor}, ${adjustColorBrightness(hexColor, -20)})`;
+        swatch.style.boxShadow = `0 0 20px ${hexColor}`;
+    }
+    if (swatchHex) {
+        swatchHex.innerText = hexColor.toUpperCase();
+        swatchHex.style.color = hexColor;
+    }
+    
+    // 3. Block C: Ionospheric D-Layer Dissolution
+    // E- E/F ionization changes skip wave
+    const baseDensity = Math.max(15, Math.min(950, Math.round(150 - (State.kpIndex * 15) + (Math.random() - 0.5) * 8)));
+    const dDensity = Math.round(baseDensity * (1.0 + Math.sin(solar.declination) * 0.1));
+    
+    // Critical Frequency
+    const critFreq = (1.8 + (dDensity / 450) + (Math.random() * 0.15)).toFixed(2);
+    
+    // Radio Wave Skip distance
+    const skipDistance = Math.round(1500 + (1000 - dDensity) * 1.25 + (State.kpIndex * 90));
+    
+    // Update DOM
+    document.getElementById("d-layer-density").innerText = `${dDensity} el/cm³`;
+    document.getElementById("critical-freq").innerText = `${critFreq} MHz`;
+    document.getElementById("radio-skip").innerText = `${skipDistance} км`;
+    
+    // Animate Radio Bounce Wave SVG
+    const ionosphereSvg = document.getElementById("ionosphere-svg");
+    if (ionosphereSvg) {
+        const wave = ionosphereSvg.querySelector(".radio-wave");
+        if (wave) {
+            // Skip distance changes wave speed
+            const speed = Math.max(1, (10 - (skipDistance / 400)));
+            wave.style.animationDuration = `${speed.toFixed(1)}s`;
+            
+            // Bounce height is higher as D-layer dissolves
+            const bounceY = Math.max(5, Math.min(25, 30 - (skipDistance - 1500) / 70));
+            wave.setAttribute("d", `M 10 50 L 50 ${bounceY} L 90 50 L 130 ${bounceY} L 170 50`);
+        }
+    }
+}
+
+// Convert temperature in Kelvin to RGB values for sunset representation
+function getSkyRGBForTemp(kelvin, aod) {
+    let r = 255;
+    let g = 0;
+    let b = 0;
+    
+    if (kelvin < 2200) {
+        r = 255;
+        g = Math.round(90 + (kelvin - 1600) * 0.08);
+        b = Math.round(30 + (kelvin - 1600) * 0.04);
+    } else if (kelvin < 4000) {
+        r = 255;
+        g = Math.round(140 + (kelvin - 2200) * 0.04);
+        b = Math.round(55 + (kelvin - 2200) * 0.035);
+    } else {
+        const factor = (kelvin - 4000) / 8500;
+        r = Math.round(255 - (factor * 180));
+        g = Math.round(195 - (factor * 120));
+        b = Math.round(110 + (factor * 145));
+    }
+    
+    r = Math.max(40, Math.min(255, Math.round(r + (aod * 30))));
+    g = Math.max(10, Math.min(255, Math.round(g - (aod * 100))));
+    b = Math.max(10, Math.min(255, Math.round(b - (aod * 80))));
+    
+    return { r, g, b };
+}
+
+function rgbToHex(r, g, b) {
+    const toHex = (c) => {
+        const hex = c.toString(16);
+        return hex.length === 1 ? "0" + hex : hex;
+    };
+    return "#" + toHex(r) + toHex(g) + toHex(b);
+}
+
+function adjustColorBrightness(hex, percent) {
+    let R = parseInt(hex.substring(1, 3), 16);
+    let G = parseInt(hex.substring(3, 5), 16);
+    let B = parseInt(hex.substring(5, 7), 16);
+
+    R = parseInt(R * (100 + percent) / 100);
+    G = parseInt(G * (100 + percent) / 100);
+    B = parseInt(B * (100 + percent) / 100);
+
+    R = (R < 255) ? R : 255;
+    G = (G < 255) ? G : 255;
+    B = (B < 255) ? B : 255;
+
+    const toHex = (c) => {
+        const h = c.toString(16);
+        return h.length === 1 ? "0" + h : h;
+    };
+    return "#" + toHex(R) + toHex(G) + toHex(B);
 }
 
 // --- History Tracker & Chart Updating ---

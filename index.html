@@ -12,7 +12,7 @@
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     
     <!-- Leaflet CSS for World Map -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
@@ -136,7 +136,7 @@
             </div>
 
             <!-- Atmospheric Scatter Model -->
-            <div class="panel glass-panel">
+            <div class="panel glass-panel mb-4">
                 <div class="panel-header">
                     <h3><i class="fa-solid fa-wand-magic-sparkles text-sunset"></i> Прогноз кольору неба</h3>
                 </div>
@@ -156,6 +156,53 @@
                     </div>
                     <p class="explanation-text mt-2">
                         <strong>Коментар фізика атмосфери:</strong> Високий рівень вологості та пилових часток у поєднанні з сонячним вітром класу G0 створюють насичені вогняно-жовтогарячі відтінки на лінії 45-55° північної широти.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Solar Radiation & Insolation Panel -->
+            <div class="panel glass-panel" id="solar-radiation-panel">
+                <div class="panel-header">
+                    <h3><i class="fa-solid fa-solar-panel text-info"></i> Сонячна радіація (Kyiv, UA)</h3>
+                    <span class="lbl-status text-success" id="solar-api-status">API Live</span>
+                </div>
+                <div class="panel-body">
+                    <div class="telemetry-grid">
+                        <div class="tel-card">
+                            <span class="tel-label">Глобальна інсоляція</span>
+                            <div class="tel-value-wrapper">
+                                <span class="tel-value" id="solar-global-val">--</span>
+                                <span class="tel-unit">Вт/м²</span>
+                            </div>
+                            <span class="tel-trend text-muted" id="solar-global-trend">Очікування...</span>
+                        </div>
+                        <div class="tel-card">
+                            <span class="tel-label">Пряма радіація (DNI)</span>
+                            <div class="tel-value-wrapper">
+                                <span class="tel-value" id="solar-direct-val">--</span>
+                                <span class="tel-unit">Вт/м²</span>
+                            </div>
+                            <span class="tel-trend text-muted" id="solar-direct-trend">Очікування...</span>
+                        </div>
+                        <div class="tel-card">
+                            <span class="tel-label">Розсіяна радіація</span>
+                            <div class="tel-value-wrapper">
+                                <span class="tel-value" id="solar-diffuse-val">--</span>
+                                <span class="tel-unit">Вт/м²</span>
+                            </div>
+                            <span class="tel-trend text-muted" id="solar-diffuse-trend">Очікування...</span>
+                        </div>
+                        <div class="tel-card">
+                            <span class="tel-label">УФ-Індекс (UV)</span>
+                            <div class="tel-value-wrapper">
+                                <span class="tel-value" id="solar-uv-val">--</span>
+                                <span class="tel-unit">index</span>
+                            </div>
+                            <span class="tel-trend text-muted" id="solar-uv-trend">Очікування...</span>
+                        </div>
+                    </div>
+                    <p class="explanation-text mt-2" style="font-size: 10px;">
+                        Дані надані в реальному часі через <strong>Open-Meteo Solar API</strong> для поточних геокоординат.
                     </p>
                 </div>
             </div>
@@ -191,6 +238,106 @@
                         <div class="hud-item">
                             <span class="hud-lbl">Terminator Velocity:</span>
                             <span class="hud-val">1,670 km/h</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Science Telemetry Expansion Row (3 New Blocks) -->
+            <div class="science-row mb-4">
+                <!-- Block A: Atmospheric Refraction -->
+                <div class="panel glass-panel science-card" id="refraction-card">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-bezier-curve text-info"></i> Оптична рефракція та міражі</h3>
+                        <span class="badge badge-sci">REFRACT-X</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="science-metrics-grid">
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Заломлення світла</span>
+                                <span class="sci-val" id="refraction-angle">34.5'</span>
+                            </div>
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Індекс Зеленого Променя</span>
+                                <span class="sci-val text-success" id="green-flash-index">12%</span>
+                            </div>
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Ймовірність міражів</span>
+                                <span class="sci-val text-warning" id="mirage-prob">4%</span>
+                            </div>
+                        </div>
+                        <!-- Micro Visualizer -->
+                        <div class="micro-visualizer mt-2">
+                            <svg id="refraction-svg" viewBox="0 0 200 60">
+                                <path d="M 10 50 Q 100 45 190 20" fill="none" stroke="var(--color-info)" stroke-width="2" class="light-ray"/>
+                                <rect x="0" y="45" width="200" height="15" fill="rgba(0, 242, 254, 0.08)"/>
+                                <line x1="0" y1="45" x2="200" y2="45" stroke="rgba(0, 242, 254, 0.25)" stroke-dasharray="4,4"/>
+                                <text x="10" y="55" fill="var(--color-text-secondary)" font-size="6">Поверхня Землі</text>
+                                <text x="120" y="38" fill="var(--color-info)" font-size="6" class="lbl-beam">Викривлення променя</text>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Block B: Sky Spectroradiometry & Color Temperature -->
+                <div class="panel glass-panel science-card" id="spectro-card">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-palette text-sunset"></i> Спектрометрія та колір неба</h3>
+                        <span class="badge badge-sci">SPECTRO-G</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="science-metrics-grid">
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Колірна температура</span>
+                                <span class="sci-val text-sunset" id="sky-temp-kelvin">2200 K</span>
+                            </div>
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Співвідношення R/B</span>
+                                <span class="sci-val" id="rb-ratio">3.4</span>
+                            </div>
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Насиченість неба</span>
+                                <span class="sci-val text-info" id="sky-chroma">84%</span>
+                            </div>
+                        </div>
+                        <!-- Dynamic Glowing Swatch -->
+                        <div class="sky-swatch-container mt-2">
+                            <div id="sky-color-swatch" class="sky-color-swatch-glow"></div>
+                            <span class="swatch-lbl" id="swatch-hex">#ff7e47</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Block C: Ionospheric D-Layer Dissolution Monitor -->
+                <div class="panel glass-panel science-card" id="ionosphere-card">
+                    <div class="panel-header">
+                        <h3><i class="fa-solid fa-tower-cell text-purple"></i> Іоносферний D-шар та зв'язок</h3>
+                        <span class="badge badge-sci">IONO-D</span>
+                    </div>
+                    <div class="panel-body">
+                        <div class="science-metrics-grid">
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Густина D-шару</span>
+                                <span class="sci-val text-purple" id="d-layer-density">180 el/cm³</span>
+                            </div>
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Критична частота</span>
+                                <span class="sci-val" id="critical-freq">2.8 MHz</span>
+                            </div>
+                            <div class="sci-stat">
+                                <span class="sci-lbl">Дальність MF зв'язку</span>
+                                <span class="sci-val text-success" id="radio-skip">1840 км</span>
+                            </div>
+                        </div>
+                        <!-- Micro Radio Bounce Visualizer -->
+                        <div class="micro-visualizer mt-2">
+                            <svg id="ionosphere-svg" viewBox="0 0 200 60">
+                                <line x1="0" y1="10" x2="200" y2="10" stroke="var(--color-purple)" stroke-width="1" stroke-dasharray="2,2"/>
+                                <line x1="0" y1="50" x2="200" y2="50" stroke="var(--color-text-muted)" stroke-width="1"/>
+                                <path d="M 10 50 L 50 10 L 90 50 L 130 10 L 170 50" fill="none" stroke="var(--color-success)" stroke-width="1.5" class="radio-wave"/>
+                                <text x="10" y="8" fill="var(--color-purple)" font-size="6">D-Шар Іоносфери (Згасає)</text>
+                                <text x="10" y="57" fill="var(--color-text-secondary)" font-size="6">Поверхня Землі (Відбиття)</text>
+                            </svg>
                         </div>
                     </div>
                 </div>
